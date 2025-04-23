@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
 import 'services/settings_service.dart';
 import 'services/notification_service.dart';
 import 'screens/oauth_settings_screen.dart';
@@ -41,11 +43,25 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isLoggedIn = false;
   UserInfo? _userInfo;
   final NotificationService _notificationService = NotificationService();
+  DateTime _currentDateTime = DateTime.now();
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _initializeApp();
+    // Set up a timer to update the time every minute
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      setState(() {
+        _currentDateTime = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _initializeApp() async {
@@ -194,52 +210,164 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildMainContent() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          if (_userInfo != null) ...[
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: Theme.of(context).primaryColor,
-              child: Text(
-                _getInitials(_userInfo!.displayName),
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+    // Format date and time
+    final now = _currentDateTime;
+    final dateStr =
+        '${now.year}年${now.month}月${now.day}日 (${_getWeekdayName(now.weekday)})';
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    return Column(
+      children: [
+        // User profile section at the top
+        if (_userInfo != null) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 25,
+                  backgroundColor: Theme.of(context).primaryColor,
+                  child: Text(
+                    _getInitials(_userInfo!.displayName),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _userInfo!.displayName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _userInfo!.email,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'こんにちは、${_userInfo!.displayName}さん',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(_userInfo!.email),
-          ] else ...[
-            const Text('ログイン成功！'),
-          ],
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: _viewUserProfile,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: const Text('詳細プロフィールを表示'),
           ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _logout,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[100],
-              foregroundColor: Colors.red[900],
-            ),
-            child: const Text('ログアウト'),
-          ),
+          const Divider(height: 1),
         ],
-      ),
+
+        // Date and time display
+        Expanded(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Date
+                Text(
+                  dateStr,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Current time in larger font
+                Text(
+                  timeStr,
+                  style: const TextStyle(
+                    fontSize: 64,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 60),
+
+                // Clock-in and clock-out buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildAttendanceButton(
+                      label: '出勤',
+                      color: Colors.green,
+                      icon: Icons.login,
+                      onPressed: _clockIn,
+                    ),
+                    _buildAttendanceButton(
+                      label: '退勤',
+                      color: Colors.blue,
+                      icon: Icons.logout,
+                      onPressed: _clockOut,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceButton({
+    required String label,
+    required Color color,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      children: [
+        ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color,
+            foregroundColor: Colors.white,
+            shape: const CircleBorder(),
+            padding: const EdgeInsets.all(24),
+          ),
+          child: Icon(icon, size: 40),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  String _getWeekdayName(int weekday) {
+    const weekdays = ['月', '火', '水', '木', '金', '土', '日'];
+    return weekdays[weekday - 1];
+  }
+
+  void _clockIn() async {
+    // TODO: Implement clock-in functionality with freee API
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('出勤打刻しました')));
+    // Send a notification
+    await _notificationService.showNotification(
+      id: 1,
+      title: '出勤打刻',
+      body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に出勤打刻しました',
+    );
+  }
+
+  void _clockOut() async {
+    // TODO: Implement clock-out functionality with freee API
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('退勤打刻しました')));
+    // Send a notification
+    await _notificationService.showNotification(
+      id: 2,
+      title: '退勤打刻',
+      body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に退勤打刻しました',
     );
   }
 
