@@ -68,6 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _currentDateTime = DateTime.now();
       });
+      _loadWorkScheduleSettings();
       // 毎分、打刻状態と通知の必要性をチェック
       _checkWorkScheduleAndNotifications();
     });

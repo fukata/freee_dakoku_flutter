@@ -1,4 +1,4 @@
-package com.example.freee_dakoku_flutter
+package dev.fukata.freee_dakoku
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
