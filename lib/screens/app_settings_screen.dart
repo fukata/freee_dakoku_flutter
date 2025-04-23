@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
 import '../services/notification_service.dart';
+import '../services/auto_start_service.dart';
 
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key});
@@ -38,8 +39,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final notificationInterval =
         await SettingsService.getNotificationInterval();
 
+    // Check if auto-start is actually enabled in the system
+    final autoStartEnabled = await AutoStartService.isAutoStartEnabled();
+
     setState(() {
       _isAutoStart = autoStart;
+
+      // If there's a mismatch between settings and system state, update settings
+      if (autoStart != autoStartEnabled) {
+        _isAutoStart = autoStartEnabled;
+        SettingsService.saveAutoStart(autoStartEnabled);
+      }
+
       _startWorkTime = startTime;
       _endWorkTime = endTime;
       _enableNotifications = enableNotifications;
@@ -53,6 +64,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       _isLoading = true;
     });
 
+    // First apply auto-start setting at OS level
+    await AutoStartService.setAutoStart(_isAutoStart);
+
+    // Then save all settings
     await SettingsService.saveAutoStart(_isAutoStart);
     await SettingsService.saveStartWorkTime(_startWorkTime);
     await SettingsService.saveEndWorkTime(_endWorkTime);
@@ -139,10 +154,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                               title: const Text('パソコン起動時に自動起動する'),
                               subtitle: const Text('パソコンが起動したとき、自動的にアプリを起動します'),
                               value: _isAutoStart,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isAutoStart = value;
-                                });
+                              onChanged: (value) async {
+                                await _updateAutoStart(value);
                               },
                             ),
                           ],
@@ -278,5 +291,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 ),
               ),
     );
+  }
+
+  Future<void> _updateAutoStart(bool value) async {
+    setState(() {
+      _isAutoStart = value;
+    });
   }
 }
