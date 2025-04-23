@@ -14,6 +14,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   bool _enableNotifications = true;
   String _startWorkTime = '09:00';
   String _endWorkTime = '18:00';
+  int _notificationInterval = 15; // Default to 15 minutes
   bool _isLoading = true;
   final NotificationService _notificationService = NotificationService();
 
@@ -34,12 +35,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final startTime = await SettingsService.getStartWorkTime();
     final endTime = await SettingsService.getEndWorkTime();
     final enableNotifications = await SettingsService.getEnableNotifications();
+    final notificationInterval =
+        await SettingsService.getNotificationInterval();
 
     setState(() {
       _isAutoStart = autoStart;
       _startWorkTime = startTime;
       _endWorkTime = endTime;
       _enableNotifications = enableNotifications;
+      _notificationInterval = notificationInterval;
       _isLoading = false;
     });
   }
@@ -53,6 +57,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     await SettingsService.saveStartWorkTime(_startWorkTime);
     await SettingsService.saveEndWorkTime(_endWorkTime);
     await SettingsService.saveEnableNotifications(_enableNotifications);
+    await SettingsService.saveNotificationInterval(_notificationInterval);
 
     setState(() {
       _isLoading = false;
@@ -206,6 +211,33 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                                   _enableNotifications = value;
                                 });
                               },
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  '通知間隔 (分)',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                                DropdownButton<int>(
+                                  value: _notificationInterval,
+                                  items:
+                                      [5, 10, 15, 30, 60]
+                                          .map(
+                                            (interval) => DropdownMenuItem<int>(
+                                              value: interval,
+                                              child: Text('$interval 分'),
+                                            ),
+                                          )
+                                          .toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _notificationInterval = value!;
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 16),
                             SizedBox(

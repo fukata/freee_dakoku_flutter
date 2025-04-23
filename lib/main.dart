@@ -46,6 +46,12 @@ class _MyHomePageState extends State<MyHomePage> {
   final NotificationService _notificationService = NotificationService();
   DateTime _currentDateTime = DateTime.now();
   Timer? _timer;
+  Timer? _workScheduleCheckTimer;
+
+  // 就業時間の設定
+  String _startWorkTime = '09:00';
+  String _endWorkTime = '18:00';
+  bool _enableNotifications = true;
 
   // 打刻ボタンの状態
   bool _canClockIn = false;
@@ -62,18 +68,43 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _currentDateTime = DateTime.now();
       });
+      // 毎分、打刻状態と通知の必要性をチェック
+      _checkWorkScheduleAndNotifications();
+    });
+
+    // 5分ごとに打刻情報を更新
+    _workScheduleCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (_isLoggedIn) {
+        _fetchLatestTimeClocks();
+      }
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _workScheduleCheckTimer?.cancel();
+    _notificationService.cancelClockInReminder();
+    _notificationService.cancelClockOutReminder();
     super.dispose();
   }
 
   Future<void> _initializeApp() async {
     await _notificationService.init();
+    await _loadWorkScheduleSettings();
     await _checkSettings();
+  }
+
+  Future<void> _loadWorkScheduleSettings() async {
+    final startTime = await SettingsService.getStartWorkTime();
+    final endTime = await SettingsService.getEndWorkTime();
+    final enableNotifications = await SettingsService.getEnableNotifications();
+
+    setState(() {
+      _startWorkTime = startTime;
+      _endWorkTime = endTime;
+      _enableNotifications = enableNotifications;
+    });
   }
 
   Future<void> _checkSettings() async {
@@ -210,6 +241,85 @@ class _MyHomePageState extends State<MyHomePage> {
       await launch(url);
     } else {
       throw 'Could not launch $url';
+    }
+  }
+
+  // 仕事の予定と通知の必要性をチェック
+  void _checkWorkScheduleAndNotifications() async {
+    if (!_isLoggedIn || !_enableNotifications) return;
+
+    final now = DateTime.now();
+
+    // 勤務開始時間と終了時間を解析
+    final startTimeParts = _startWorkTime.split(':');
+    final startHour = int.parse(startTimeParts[0]);
+    final startMinute = int.parse(startTimeParts[1]);
+
+    final endTimeParts = _endWorkTime.split(':');
+    final endHour = int.parse(endTimeParts[0]);
+    final endMinute = int.parse(endTimeParts[1]);
+
+    // 今日の勤務開始・終了時刻を作成
+    final startDateTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      startHour,
+      startMinute,
+    );
+    final endDateTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      endHour,
+      endMinute,
+    );
+
+    // 現在の打刻状態を確認
+    bool hasCheckedIn = false;
+    bool hasCheckedOut = false;
+
+    if (_timeClocks != null && _timeClocks!.isNotEmpty) {
+      // 今日の打刻があるかチェック
+      for (var timeClock in _timeClocks!) {
+        if (timeClock.type == 'clock_in') {
+          hasCheckedIn = true;
+        } else if (timeClock.type == 'clock_out') {
+          hasCheckedOut = true;
+        }
+      }
+    }
+
+    // 出勤時刻を過ぎているのに打刻がない場合
+    if (now.isAfter(startDateTime) && !hasCheckedIn) {
+      // 最初の通知
+      await _notificationService.showNotification(
+        id: NotificationService.clockInNotificationId,
+        title: '出勤打刻リマインダー',
+        body: '出勤時間を過ぎています。出勤打刻を行ってください。',
+      );
+
+      // 定期的なリマインダーを開始
+      _notificationService.startClockInReminder();
+    } else if (hasCheckedIn) {
+      // 出勤打刻済みならリマインダーを停止
+      _notificationService.cancelClockInReminder();
+    }
+
+    // 退勤時刻を過ぎているのに出勤中の場合（退勤打刻がない）
+    if (now.isAfter(endDateTime) && hasCheckedIn && !hasCheckedOut) {
+      // 最初の通知
+      await _notificationService.showNotification(
+        id: NotificationService.clockOutNotificationId,
+        title: '退勤打刻リマインダー',
+        body: '終業時間を過ぎています。退勤打刻を行ってください。',
+      );
+
+      // 定期的なリマインダーを開始
+      _notificationService.startClockOutReminder();
+    } else if (hasCheckedOut) {
+      // 退勤打刻済みならリマインダーを停止
+      _notificationService.cancelClockOutReminder();
     }
   }
 

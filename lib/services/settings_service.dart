@@ -79,6 +79,7 @@ class SettingsService {
   static const String startWorkTimeKey = 'start_work_time';
   static const String endWorkTimeKey = 'end_work_time';
   static const String enableNotificationsKey = 'enable_notifications';
+  static const String notificationIntervalKey = 'notification_interval';
 
   // ClientIDを保存
   static Future<bool> saveClientId(String clientId) async {
@@ -476,5 +477,16 @@ class SettingsService {
   static Future<bool> getEnableNotifications() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getBool(enableNotificationsKey) ?? true;
+  }
+
+  // Notification Interval Settings (in minutes)
+  static Future<bool> saveNotificationInterval(int minutes) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setInt(notificationIntervalKey, minutes);
+  }
+
+  static Future<int> getNotificationInterval() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(notificationIntervalKey) ?? 15; // Default is 15 minutes
   }
 }

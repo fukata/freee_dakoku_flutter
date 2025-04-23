@@ -1,4 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:async';
+import '../services/settings_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -7,6 +9,15 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  // Timer for recurring notifications
+  Timer? _clockInReminderTimer;
+  Timer? _clockOutReminderTimer;
+
+  // Notification IDs
+  static const int clockInNotificationId = 1;
+  static const int clockOutNotificationId = 2;
+  static const int testNotificationId = 999;
 
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -95,9 +106,83 @@ class NotificationService {
     );
   }
 
+  // Start a recurring reminder for clock-in
+  Future<void> startClockInReminder() async {
+    // Cancel any existing reminder first
+    cancelClockInReminder();
+
+    final bool enableNotifications =
+        await SettingsService.getEnableNotifications();
+    if (!enableNotifications) return;
+
+    final int intervalMinutes = await SettingsService.getNotificationInterval();
+
+    _clockInReminderTimer = Timer.periodic(Duration(minutes: intervalMinutes), (
+      timer,
+    ) async {
+      // Check if notifications are still enabled
+      final bool stillEnabled = await SettingsService.getEnableNotifications();
+      if (!stillEnabled) {
+        cancelClockInReminder();
+        return;
+      }
+
+      // Show the reminder notification
+      await showNotification(
+        id: clockInNotificationId,
+        title: '出勤打刻リマインダー',
+        body: '出勤打刻がまだ行われていません。打刻を行ってください。',
+      );
+    });
+  }
+
+  // Start a recurring reminder for clock-out
+  Future<void> startClockOutReminder() async {
+    // Cancel any existing reminder first
+    cancelClockOutReminder();
+
+    final bool enableNotifications =
+        await SettingsService.getEnableNotifications();
+    if (!enableNotifications) return;
+
+    final int intervalMinutes = await SettingsService.getNotificationInterval();
+
+    _clockOutReminderTimer = Timer.periodic(
+      Duration(minutes: intervalMinutes),
+      (timer) async {
+        // Check if notifications are still enabled
+        final bool stillEnabled =
+            await SettingsService.getEnableNotifications();
+        if (!stillEnabled) {
+          cancelClockOutReminder();
+          return;
+        }
+
+        // Show the reminder notification
+        await showNotification(
+          id: clockOutNotificationId,
+          title: '退勤打刻リマインダー',
+          body: '退勤打刻がまだ行われていません。打刻を行ってください。',
+        );
+      },
+    );
+  }
+
+  // Cancel clock-in reminder
+  void cancelClockInReminder() {
+    _clockInReminderTimer?.cancel();
+    _clockInReminderTimer = null;
+  }
+
+  // Cancel clock-out reminder
+  void cancelClockOutReminder() {
+    _clockOutReminderTimer?.cancel();
+    _clockOutReminderTimer = null;
+  }
+
   Future<void> showTestNotification() async {
     await showNotification(
-      id: 0,
+      id: testNotificationId,
       title: 'テスト通知',
       body: 'これはテスト通知です。通知システムが正常に動作しています。',
     );
