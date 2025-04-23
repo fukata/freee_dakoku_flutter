@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="freee_dakoku_flutter"
+        android:label="freee打刻"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
