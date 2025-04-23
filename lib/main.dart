@@ -79,26 +79,16 @@ class _MyHomePageState extends State<MyHomePage> {
   List<TimeClock>? _timeClocks;
   bool _isClockActionLoading = false;
 
+  // 以前の設定値を保存する変数
+  String _previousStartWorkTime = '09:00';
+  String _previousEndWorkTime = '18:00';
+  bool _previousEnableNotifications = true;
+
   @override
   void initState() {
     super.initState();
     _initializeApp();
-    // Set up a timer to update the time every minute
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      setState(() {
-        _currentDateTime = DateTime.now();
-      });
-      _loadWorkScheduleSettings();
-      // 毎分、打刻状態と通知の必要性をチェック
-      _checkWorkScheduleAndNotifications();
-    });
-
-    // 5分ごとに打刻情報を更新
-    _workScheduleCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (_isLoggedIn) {
-        _fetchLatestTimeClocks();
-      }
-    });
+    _setupTimers();
   }
 
   @override
@@ -121,6 +111,61 @@ class _MyHomePageState extends State<MyHomePage> {
 
     await _loadWorkScheduleSettings();
     await _checkSettings();
+  }
+
+  // タイマーのセットアップを行う
+  void _setupTimers() {
+    // 既存のタイマーがあればキャンセル
+    _timer?.cancel();
+    _workScheduleCheckTimer?.cancel();
+
+    // 時間表示を更新するタイマーを設定（1分ごと）
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      setState(() {
+        _currentDateTime = DateTime.now();
+      });
+      _checkSettingsChanges();
+      // 毎分、打刻状態と通知の必要性をチェック
+      _checkWorkScheduleAndNotifications();
+    });
+
+    // 打刻情報を更新するタイマー（5分ごと）
+    _workScheduleCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (_isLoggedIn) {
+        _fetchLatestTimeClocks();
+      }
+    });
+  }
+
+  // 設定の変更をチェックし、変更があればタイマーをリセット
+  Future<void> _checkSettingsChanges() async {
+    await _loadWorkScheduleSettings();
+
+    // 設定値が変更されているかチェック
+    bool settingsChanged =
+        _startWorkTime != _previousStartWorkTime ||
+        _endWorkTime != _previousEndWorkTime ||
+        _enableNotifications != _previousEnableNotifications;
+
+    // 設定が変更されていれば現在値を保存してタイマーをリセット
+    if (settingsChanged) {
+      debugPrint('Work schedule settings changed, resetting timers');
+
+      // 前回の値を更新
+      _previousStartWorkTime = _startWorkTime;
+      _previousEndWorkTime = _endWorkTime;
+      _previousEnableNotifications = _enableNotifications;
+
+      // 通知リマインダーをリセット
+      _notificationService.cancelClockInReminder();
+      _notificationService.cancelClockOutReminder();
+
+      // タイマーを再設定
+      _setupTimers();
+
+      // 設定変更後すぐに状態をチェック
+      _checkWorkScheduleAndNotifications();
+    }
   }
 
   // Bring the app to the foreground when notification is tapped
@@ -287,10 +332,35 @@ class _MyHomePageState extends State<MyHomePage> {
     ).push(MaterialPageRoute(builder: (context) => const UserProfileScreen()));
   }
 
-  void _showAppSettings() {
-    Navigator.of(
+  void _showAppSettings() async {
+    final result = await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const AppSettingsScreen()));
+
+    // Check if settings were changed
+    if (result is Map<String, bool>) {
+      bool workScheduleChanged =
+          result['startTimeChanged'] == true ||
+          result['endTimeChanged'] == true;
+      bool notificationsChanged = result['notificationsChanged'] == true;
+
+      if (workScheduleChanged || notificationsChanged) {
+        debugPrint(
+          'Work schedule or notification settings changed, refreshing...',
+        );
+
+        // 設定を再取得し、タイマーをリセット
+        await _loadWorkScheduleSettings();
+
+        // 設定の変更を検出したら即座にタイマーをリセットして通知の設定を反映
+        _notificationService.cancelClockInReminder();
+        _notificationService.cancelClockOutReminder();
+        _setupTimers();
+
+        // 打刻状態と通知の必要性をすぐにチェック
+        _checkWorkScheduleAndNotifications();
+      }
+    }
   }
 
   void _openFreeeWebsite() async {

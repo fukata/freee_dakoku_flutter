@@ -64,6 +64,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       _isLoading = true;
     });
 
+    // 前の値を保存
+    final previousStartTime = await SettingsService.getStartWorkTime();
+    final previousEndTime = await SettingsService.getEndWorkTime();
+    final previousEnableNotifications =
+        await SettingsService.getEnableNotifications();
+    final previousNotificationInterval =
+        await SettingsService.getNotificationInterval();
+
     // First apply auto-start setting at OS level
     await AutoStartService.setAutoStart(_isAutoStart);
 
@@ -84,7 +92,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       context,
     ).showSnackBar(const SnackBar(content: Text('設定が保存されました')));
 
-    Navigator.of(context).pop(true); // 設定が保存されたことを通知
+    // 設定が変更されたことを通知（どの設定が変更されたかも通知）
+    Map<String, bool> changedSettings = {
+      'startTimeChanged': _startWorkTime != previousStartTime,
+      'endTimeChanged': _endWorkTime != previousEndTime,
+      'notificationsChanged':
+          _enableNotifications != previousEnableNotifications ||
+          _notificationInterval != previousNotificationInterval,
+    };
+
+    Navigator.of(context).pop(changedSettings); // 変更された設定情報を通知
   }
 
   Future<void> _selectTime(BuildContext context, bool isStartTime) async {
