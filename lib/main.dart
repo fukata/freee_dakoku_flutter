@@ -46,6 +46,12 @@ class _MyHomePageState extends State<MyHomePage> {
   DateTime _currentDateTime = DateTime.now();
   Timer? _timer;
 
+  // 打刻ボタンの状態
+  bool _canClockIn = false;
+  bool _canClockOut = false;
+  List<TimeClock>? _timeClocks;
+  bool _isClockActionLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +83,10 @@ class _MyHomePageState extends State<MyHomePage> {
     if (isLoggedIn) {
       // ログイン済みの場合はユーザー情報を取得
       final userInfo = await SettingsService.getUserInfo();
+
+      // 最新の打刻情報を取得
+      await _fetchLatestTimeClocks();
+
       setState(() {
         _isConfigured = isConfigured;
         _isLoggedIn = isLoggedIn;
@@ -95,6 +105,56 @@ class _MyHomePageState extends State<MyHomePage> {
       _showSettingsScreen();
     } else if (!isLoggedIn) {
       _showLoginScreen();
+    }
+  }
+
+  Future<void> _fetchLatestTimeClocks() async {
+    try {
+      final timeClocks = await SettingsService.getLatestTimeClocks();
+
+      if (timeClocks == null) {
+        setState(() {
+          _timeClocks = [];
+          // データが取得できない場合は出勤ボタンのみ活性化
+          _canClockIn = true;
+          _canClockOut = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _timeClocks = timeClocks;
+
+        if (timeClocks.isEmpty) {
+          // データがない場合は出勤ボタンのみ活性化
+          _canClockIn = true;
+          _canClockOut = false;
+        } else {
+          // 最後の打刻のタイプをチェック
+          final lastTimeClock = timeClocks.last;
+
+          if (lastTimeClock.type == 'clock_in') {
+            // 最後の打刻が出勤の場合は退勤ボタンを活性化
+            _canClockIn = false;
+            _canClockOut = true;
+          } else if (lastTimeClock.type == 'clock_out') {
+            // 最後の打刻が退勤の場合は出勤ボタンを活性化
+            _canClockIn = true;
+            _canClockOut = false;
+          } else {
+            // その他の場合（休憩など）は一旦両方活性化
+            _canClockIn = true;
+            _canClockOut = true;
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error fetching time clocks: $e');
+      setState(() {
+        _timeClocks = [];
+        _canClockIn = true;
+        _canClockOut = false;
+      });
     }
   }
 
@@ -319,22 +379,39 @@ class _MyHomePageState extends State<MyHomePage> {
     required IconData icon,
     required VoidCallback onPressed,
   }) {
+    // Determine if this button is enabled based on label
+    bool isEnabled = label == '出勤' ? _canClockIn : _canClockOut;
+    bool isLoading = _isClockActionLoading;
+
     return Column(
       children: [
         ElevatedButton(
-          onPressed: onPressed,
+          onPressed: isEnabled && !isLoading ? onPressed : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
+            backgroundColor: isEnabled ? color : Colors.grey.shade300,
+            foregroundColor: isEnabled ? Colors.white : Colors.grey.shade600,
+            disabledBackgroundColor: Colors.grey.shade300,
+            disabledForegroundColor: Colors.grey.shade600,
             shape: const CircleBorder(),
             padding: const EdgeInsets.all(24),
           ),
-          child: Icon(icon, size: 40),
+          child:
+              isLoading
+                  ? const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(color: Colors.white),
+                  )
+                  : Icon(icon, size: 40),
         ),
         const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isEnabled ? null : Colors.grey.shade500,
+          ),
         ),
       ],
     );
@@ -346,29 +423,97 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _clockIn() async {
-    // TODO: Implement clock-in functionality with freee API
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('出勤打刻しました')));
-    // Send a notification
-    await _notificationService.showNotification(
-      id: 1,
-      title: '出勤打刻',
-      body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に出勤打刻しました',
-    );
+    if (!_canClockIn || _isClockActionLoading) return;
+
+    setState(() {
+      _isClockActionLoading = true;
+    });
+
+    try {
+      final success = await SettingsService.clockIn();
+
+      if (success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('出勤打刻しました')));
+
+        // 通知を送信
+        await _notificationService.showNotification(
+          id: 1,
+          title: '出勤打刻',
+          body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に出勤打刻しました',
+        );
+
+        // 最新の打刻情報を再取得
+        await _fetchLatestTimeClocks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('出勤打刻に失敗しました'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Clock in error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('エラーが発生しました: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isClockActionLoading = false;
+      });
+    }
   }
 
   void _clockOut() async {
-    // TODO: Implement clock-out functionality with freee API
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('退勤打刻しました')));
-    // Send a notification
-    await _notificationService.showNotification(
-      id: 2,
-      title: '退勤打刻',
-      body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に退勤打刻しました',
-    );
+    if (!_canClockOut || _isClockActionLoading) return;
+
+    setState(() {
+      _isClockActionLoading = true;
+    });
+
+    try {
+      final success = await SettingsService.clockOut();
+
+      if (success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('退勤打刻しました')));
+
+        // 通知を送信
+        await _notificationService.showNotification(
+          id: 2,
+          title: '退勤打刻',
+          body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に退勤打刻しました',
+        );
+
+        // 最新の打刻情報を再取得
+        await _fetchLatestTimeClocks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('退勤打刻に失敗しました'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Clock out error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('エラーが発生しました: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isClockActionLoading = false;
+      });
+    }
   }
 
   Widget _buildLoginNeededContent() {

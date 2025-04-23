@@ -43,6 +43,30 @@ class UserInfo {
   }
 }
 
+class TimeClock {
+  final int id;
+  final String? type;
+  final DateTime baseDate;
+  final DateTime? dateTime;
+
+  TimeClock({
+    required this.id,
+    required this.type,
+    required this.baseDate,
+    this.dateTime,
+  });
+
+  factory TimeClock.fromJson(Map<String, dynamic> json) {
+    return TimeClock(
+      id: json['id'],
+      type: json['type'],
+      baseDate: DateTime.parse(json['date']),
+      dateTime:
+          json['datetime'] != null ? DateTime.parse(json['datetime']) : null,
+    );
+  }
+}
+
 class SettingsService {
   static const String clientIdKey = 'oauth_client_id';
   static const String clientSecretKey = 'oauth_client_secret';
@@ -304,6 +328,108 @@ class SettingsService {
     } catch (e) {
       debugPrint('Error getting user info: $e');
       return null;
+    }
+  }
+
+  // 最新の打刻情報を取得
+  static Future<List<TimeClock>?> getLatestTimeClocks() async {
+    try {
+      final accessToken = await getAccessToken();
+      if (accessToken == null) return null;
+
+      // 現在のユーザー情報を取得
+      final userInfo = await getUserInfo();
+      if (userInfo == null) return null;
+
+      final now = DateTime.now();
+      final baseDate =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      final response = await http.get(
+        Uri.parse(
+          'https://api.freee.co.jp/hr/api/v1/employees/${userInfo.id}/time_clocks?date=$baseDate',
+        ),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> timeClockList = data['time_clocks'];
+        return timeClockList
+            .map<TimeClock>((tc) => TimeClock.fromJson(tc))
+            .toList();
+      } else if (response.statusCode == 401) {
+        // アクセストークンの期限切れの場合、リフレッシュを試みる
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          // リフレッシュに成功したら再度APIを呼び出す
+          return getLatestTimeClocks();
+        }
+      }
+      debugPrint('Failed to get time clocks: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('Error getting time clocks: $e');
+      return null;
+    }
+  }
+
+  // 出勤打刻を実行
+  static Future<bool> clockIn() async {
+    try {
+      final accessToken = await getAccessToken();
+      if (accessToken == null) return false;
+
+      // 現在のユーザー情報を取得
+      final userInfo = await getUserInfo();
+      if (userInfo == null) return false;
+
+      final response = await http.post(
+        Uri.parse(
+          'https://api.freee.co.jp/hr/api/v1/employees/${userInfo.id}/time_clocks',
+        ),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'type': 'clock_in'}),
+      );
+
+      return response.statusCode == 201;
+    } catch (e) {
+      debugPrint('Error clocking in: $e');
+      return false;
+    }
+  }
+
+  // 退勤打刻を実行
+  static Future<bool> clockOut() async {
+    try {
+      final accessToken = await getAccessToken();
+      if (accessToken == null) return false;
+
+      // 現在のユーザー情報を取得
+      final userInfo = await getUserInfo();
+      if (userInfo == null) return false;
+
+      final response = await http.post(
+        Uri.parse(
+          'https://api.freee.co.jp/hr/api/v1/employees/${userInfo.id}/time_clocks',
+        ),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'type': 'clock_out'}),
+      );
+
+      return response.statusCode == 201;
+    } catch (e) {
+      debugPrint('Error clocking out: $e');
+      return false;
     }
   }
 
