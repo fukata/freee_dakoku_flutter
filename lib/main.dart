@@ -91,8 +91,45 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _initializeApp() async {
     await _notificationService.init();
+
+    // Set up notification tap handler
+    _notificationService.setOnNotificationTap(() {
+      // This will bring the app to the foreground when notification is tapped
+      _bringAppToForeground();
+    });
+
     await _loadWorkScheduleSettings();
     await _checkSettings();
+  }
+
+  // Bring the app to the foreground when notification is tapped
+  void _bringAppToForeground() {
+    debugPrint('Bringing app to foreground after notification tap');
+
+    // ユニークなメッセージチャネルを設定して、アプリをフォアグラウンドに戻す
+    const platform = MethodChannel('com.example.freee_dakoku/app_retain');
+
+    try {
+      platform
+          .invokeMethod('bringToForeground')
+          .then((_) {
+            debugPrint(
+              'Successfully called native method to bring app to foreground',
+            );
+          })
+          .catchError((error) {
+            debugPrint('Error bringing app to foreground: $error');
+          });
+    } catch (e) {
+      debugPrint('Exception when bringing app to foreground: $e');
+    }
+
+    // 遅延をかけてからナビゲーションを実行
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.popUntil(context, (route) => route.isFirst);
+      }
+    });
   }
 
   Future<void> _loadWorkScheduleSettings() async {

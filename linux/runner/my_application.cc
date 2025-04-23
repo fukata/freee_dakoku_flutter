@@ -14,6 +14,11 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// Forward declaration of method call handler
+static void method_call_handler(FlMethodChannel* channel,
+                               FlMethodCall* call,
+                               gpointer user_data);
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -23,10 +28,7 @@ static void my_application_activate(GApplication* application) {
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
   // desktop).
-  // If running on X and not using GNOME then just use a traditional title bar
-  // in case the window manager does more exotic layout, e.g. tiling.
-  // If running on Wayland assume the header bar will work (may need changing
-  // if future cases occur).
+  // If running on X11, can't use header bar style.
   gboolean use_header_bar = TRUE;
 #ifdef GDK_WINDOWING_X11
   GdkScreen* screen = gtk_window_get_screen(window);
@@ -59,7 +61,39 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  // アプリをフォアグラウンドに表示するためのメソッドチャネルの登録
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  g_autoptr(FlMethodChannel) channel =
+      fl_method_channel_new(fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+                           "com.example.freee_dakoku/app_retain",
+                           FL_METHOD_CODEC(codec));
+  
+  fl_method_channel_set_method_call_handler(channel, method_call_handler, nullptr, nullptr);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
+}
+
+// Method call handler implementation
+static void method_call_handler(FlMethodChannel* channel,
+                               FlMethodCall* call,
+                               gpointer user_data) {
+  g_autoptr(FlMethodResponse) response = nullptr;
+  const gchar* method = fl_method_call_get_name(call);
+  
+  if (strcmp(method, "bringToForeground") == 0) {
+    // LinuxでGtk+アプリケーションをフォアグラウンドに表示する
+    GtkWindow* window = gtk_application_get_active_window(GTK_APPLICATION(g_application_get_default()));
+    if (window != nullptr) {
+      gtk_window_present(window);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_bool(TRUE)));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_bool(FALSE)));
+    }
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  
+  fl_method_call_respond(call, response, nullptr);
 }
 
 // Implements GApplication::local_command_line.

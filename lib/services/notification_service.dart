@@ -1,11 +1,19 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import '../services/settings_service.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+
+// Function type definition for notification tap callback
+typedef NotificationTapCallback = void Function();
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
+
+  // Callback to be called when a notification is tapped
+  NotificationTapCallback? _onNotificationTapped;
 
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -18,6 +26,11 @@ class NotificationService {
   static const int clockInNotificationId = 1;
   static const int clockOutNotificationId = 2;
   static const int testNotificationId = 999;
+
+  // Set callback for notification taps
+  void setOnNotificationTap(NotificationTapCallback callback) {
+    _onNotificationTapped = callback;
+  }
 
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -45,9 +58,37 @@ class NotificationService {
       onDidReceiveNotificationResponse: (
         NotificationResponse notificationResponse,
       ) {
-        // Handle notification taps here
+        // Bring the app to foreground when notification is tapped
+        _handleNotificationTap(notificationResponse);
       },
     );
+  }
+
+  // Handle notification taps to bring app to foreground
+  void _handleNotificationTap(NotificationResponse response) {
+    debugPrint(
+      'Notification tapped: ${response.notificationResponseType} - ${response.id}',
+    );
+
+    // テスト通知の場合もコールバックを確実に実行する
+    if (response.id == testNotificationId) {
+      debugPrint('Test notification tapped, ensuring callback execution');
+    }
+
+    // Execute the registered callback
+    if (_onNotificationTapped != null) {
+      // 直ちに実行
+      _onNotificationTapped!();
+
+      // 少し遅延後にも再度実行を試みる（確実に反応させるため）
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (_onNotificationTapped != null) {
+          _onNotificationTapped!();
+        }
+      });
+    } else {
+      debugPrint('Warning: No notification tap callback registered');
+    }
   }
 
   Future<void> requestPermissions() async {
