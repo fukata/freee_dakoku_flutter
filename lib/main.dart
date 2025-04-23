@@ -223,22 +223,22 @@ class _MyHomePageState extends State<MyHomePage> {
             itemBuilder:
                 (context) => [
                   const PopupMenuItem(
-                    value: 'oauth',
-                    child: Row(
-                      children: [
-                        Icon(Icons.key),
-                        SizedBox(width: 8),
-                        Text('OAuth設定'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
                     value: 'app',
                     child: Row(
                       children: [
                         Icon(Icons.settings),
                         SizedBox(width: 8),
                         Text('アプリ設定'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'oauth',
+                    child: Row(
+                      children: [
+                        Icon(Icons.key),
+                        SizedBox(width: 8),
+                        Text('OAuth設定'),
                       ],
                     ),
                   ),
