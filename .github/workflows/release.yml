@@ -33,25 +33,27 @@ jobs:
       - name: Build for Linux 
         run: |
           flutter build linux --release
-          mv build/linux/x64/release/bundle/freee_dakoku_flutter freee_dakoku_flutter_linux_${{ github.ref_name }}
+          cd build/linux/x64/release/bundle
+          tar -czvf ../../../../../freee_dakoku_linux_${{ github.ref_name }}.tar.gz *
+          cd ../../../../../
 
       #- name: Build for Windows
       #  run: |
       #    flutter build windows --release
       #    cd build/windows/runner/Release
-      #    zip -r ../../../../../freee_dakoku_flutter_windows_${{ github.ref_name }}.zip *.exe *.dll *.pdb *.manifest *.appx *.appxbundle
+      #    zip -r ../../../../../freee_dakoku_windows_${{ github.ref_name }}.zip *.exe *.dll *.pdb *.manifest *.appx *.appxbundle
       #    cd ../../../../../
       
       #- name: Build for MacOS
       #  run: |
       #    flutter build macos --release
       #    cd build/macos/Build/Products/Release
-      #    zip -r ../../../../../freee_dakoku_flutter_macos_${{ github.ref_name }}.zip *.app
+      #    zip -r ../../../../../freee_dakoku_macos_${{ github.ref_name }}.zip *.app
       #    cd ../../../../../
 
       - name: Create Release
         run: |
-          gh release create ${{github.ref_name}} --generate-notes freee_dakoku_flutter_linux_${{ github.ref_name }}
+          gh release create ${{github.ref_name}} --generate-notes freee_dakoku_linux_${{ github.ref_name }}.tar.gz
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       
