@@ -38,6 +38,7 @@ dependencies:
   oauth2_client: 4.1.0
   http: ^1.2.1
   flutter_local_notifications: ^17.0.0
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:

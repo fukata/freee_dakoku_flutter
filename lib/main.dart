@@ -7,6 +7,7 @@ import 'screens/oauth_settings_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/user_profile_screen.dart';
 import 'screens/app_settings_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -203,6 +204,15 @@ class _MyHomePageState extends State<MyHomePage> {
     ).push(MaterialPageRoute(builder: (context) => const AppSettingsScreen()));
   }
 
+  void _openFreeeWebsite() async {
+    const url = 'https://p.secure.freee.co.jp/';
+    if (await canLaunch(url)) {
+      await launch(url);
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -364,6 +374,21 @@ class _MyHomePageState extends State<MyHomePage> {
                       onPressed: _clockOut,
                     ),
                   ],
+                ),
+
+                const SizedBox(height: 40),
+
+                // Button to open freee website
+                ElevatedButton.icon(
+                  onPressed: _openFreeeWebsite,
+                  icon: const Icon(Icons.open_in_browser),
+                  label: const Text('freeeウェブサイトを開く'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                  ),
                 ),
               ],
             ),
