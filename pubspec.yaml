@@ -37,6 +37,7 @@ dependencies:
   shared_preferences: ^2.2.2
   oauth2_client: 4.1.0
   http: ^1.2.1
+  flutter_local_notifications: ^17.0.0
 
 dev_dependencies:
   flutter_test:

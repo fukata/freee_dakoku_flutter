@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'services/settings_service.dart';
+import 'services/notification_service.dart';
 import 'screens/oauth_settings_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/user_profile_screen.dart';
+import 'screens/app_settings_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -37,11 +40,17 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isConfigured = false;
   bool _isLoggedIn = false;
   UserInfo? _userInfo;
+  final NotificationService _notificationService = NotificationService();
 
   @override
   void initState() {
     super.initState();
-    _checkSettings();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    await _notificationService.init();
+    await _checkSettings();
   }
 
   Future<void> _checkSettings() async {
@@ -112,6 +121,12 @@ class _MyHomePageState extends State<MyHomePage> {
     ).push(MaterialPageRoute(builder: (context) => const UserProfileScreen()));
   }
 
+  void _showAppSettings() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const AppSettingsScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,17 +134,52 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _openSettings,
-            tooltip: 'OAuth設定',
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'oauth') {
+                _openSettings();
+              } else if (value == 'app') {
+                _showAppSettings();
+              } else if (value == 'logout' && _isLoggedIn) {
+                _logout();
+              }
+            },
+            itemBuilder:
+                (context) => [
+                  const PopupMenuItem(
+                    value: 'oauth',
+                    child: Row(
+                      children: [
+                        Icon(Icons.key),
+                        SizedBox(width: 8),
+                        Text('OAuth設定'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'app',
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings),
+                        SizedBox(width: 8),
+                        Text('アプリ設定'),
+                      ],
+                    ),
+                  ),
+                  if (_isLoggedIn)
+                    const PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout),
+                          SizedBox(width: 8),
+                          Text('ログアウト'),
+                        ],
+                      ),
+                    ),
+                ],
+            icon: const Icon(Icons.more_vert),
           ),
-          if (_isLoggedIn)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _logout,
-              tooltip: 'ログアウト',
-            ),
         ],
       ),
       body:

@@ -50,6 +50,12 @@ class SettingsService {
   static const String refreshTokenKey = 'oauth_refresh_token';
   static const String tokenExpiryKey = 'oauth_token_expiry';
 
+  // App settings keys
+  static const String autoStartKey = 'app_auto_start';
+  static const String startWorkTimeKey = 'start_work_time';
+  static const String endWorkTimeKey = 'end_work_time';
+  static const String enableNotificationsKey = 'enable_notifications';
+
   // ClientIDを保存
   static Future<bool> saveClientId(String clientId) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -299,5 +305,50 @@ class SettingsService {
       debugPrint('Error getting user info: $e');
       return null;
     }
+  }
+
+  // App Settings Methods
+
+  // Auto Start
+  static Future<bool> saveAutoStart(bool autoStart) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setBool(autoStartKey, autoStart);
+  }
+
+  static Future<bool> getAutoStart() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(autoStartKey) ?? false;
+  }
+
+  // Work Hours
+  static Future<bool> saveStartWorkTime(String startTime) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setString(startWorkTimeKey, startTime);
+  }
+
+  static Future<String> getStartWorkTime() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(startWorkTimeKey) ?? '09:00';
+  }
+
+  static Future<bool> saveEndWorkTime(String endTime) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setString(endWorkTimeKey, endTime);
+  }
+
+  static Future<String> getEndWorkTime() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(endWorkTimeKey) ?? '18:00';
+  }
+
+  // Notification Settings
+  static Future<bool> saveEnableNotifications(bool enable) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setBool(enableNotificationsKey, enable);
+  }
+
+  static Future<bool> getEnableNotifications() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(enableNotificationsKey) ?? true;
   }
 }
