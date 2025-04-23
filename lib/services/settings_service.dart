@@ -17,6 +17,32 @@ class FreeeOAuth2Client extends OAuth2Client {
       );
 }
 
+class UserInfo {
+  final int id;
+  final String email;
+  final String displayName;
+  final String? firstName;
+  final String? lastName;
+
+  UserInfo({
+    required this.id,
+    required this.email,
+    required this.displayName,
+    this.firstName,
+    this.lastName,
+  });
+
+  factory UserInfo.fromJson(Map<String, dynamic> json) {
+    return UserInfo(
+      id: json['id'],
+      email: json['email'],
+      displayName: json['display_name'],
+      firstName: json['first_name'],
+      lastName: json['last_name'],
+    );
+  }
+}
+
 class SettingsService {
   static const String clientIdKey = 'oauth_client_id';
   static const String clientSecretKey = 'oauth_client_secret';
@@ -240,5 +266,38 @@ class SettingsService {
     await prefs.remove(accessTokenKey);
     await prefs.remove(refreshTokenKey);
     return prefs.remove(tokenExpiryKey);
+  }
+
+  // ユーザー情報を取得
+  static Future<UserInfo?> getUserInfo() async {
+    try {
+      final accessToken = await getAccessToken();
+      if (accessToken == null) return null;
+
+      final response = await http.get(
+        Uri.parse('https://api.freee.co.jp/api/1/users/me'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return UserInfo.fromJson(data['user']);
+      } else if (response.statusCode == 401) {
+        // アクセストークンの期限切れの場合、リフレッシュを試みる
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          // リフレッシュに成功したら再度APIを呼び出す
+          return getUserInfo();
+        }
+      }
+      debugPrint('Failed to get user info: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('Error getting user info: $e');
+      return null;
+    }
   }
 }

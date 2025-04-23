@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'services/settings_service.dart';
 import 'screens/oauth_settings_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/user_profile_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -35,6 +36,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isLoading = true;
   bool _isConfigured = false;
   bool _isLoggedIn = false;
+  UserInfo? _userInfo;
 
   @override
   void initState() {
@@ -47,11 +49,22 @@ class _MyHomePageState extends State<MyHomePage> {
     final isLoggedIn =
         isConfigured ? await SettingsService.isLoggedIn() : false;
 
-    setState(() {
-      _isConfigured = isConfigured;
-      _isLoggedIn = isLoggedIn;
-      _isLoading = false;
-    });
+    if (isLoggedIn) {
+      // ログイン済みの場合はユーザー情報を取得
+      final userInfo = await SettingsService.getUserInfo();
+      setState(() {
+        _isConfigured = isConfigured;
+        _isLoggedIn = isLoggedIn;
+        _userInfo = userInfo;
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isConfigured = isConfigured;
+        _isLoggedIn = isLoggedIn;
+        _isLoading = false;
+      });
+    }
 
     if (!isConfigured) {
       _showSettingsScreen();
@@ -93,6 +106,12 @@ class _MyHomePageState extends State<MyHomePage> {
     _checkSettings();
   }
 
+  void _viewUserProfile() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const UserProfileScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,9 +148,46 @@ class _MyHomePageState extends State<MyHomePage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          const Text('ログイン成功！メイン画面です'),
-          const SizedBox(height: 20),
-          ElevatedButton(onPressed: _logout, child: const Text('ログアウト')),
+          if (_userInfo != null) ...[
+            CircleAvatar(
+              radius: 40,
+              backgroundColor: Theme.of(context).primaryColor,
+              child: Text(
+                _getInitials(_userInfo!.displayName),
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'こんにちは、${_userInfo!.displayName}さん',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(_userInfo!.email),
+          ] else ...[
+            const Text('ログイン成功！'),
+          ],
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: _viewUserProfile,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('詳細プロフィールを表示'),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _logout,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[100],
+              foregroundColor: Colors.red[900],
+            ),
+            child: const Text('ログアウト'),
+          ),
         ],
       ),
     );
@@ -190,5 +246,16 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
     );
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty) return '?';
+
+    final nameParts = name.split(' ');
+    if (nameParts.length > 1) {
+      return '${nameParts[0][0]}${nameParts[1][0]}'.toUpperCase();
+    }
+
+    return name.substring(0, 1).toUpperCase();
   }
 }
