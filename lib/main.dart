@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'services/settings_service.dart';
 import 'screens/oauth_settings_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -33,6 +34,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   bool _isLoading = true;
   bool _isConfigured = false;
+  bool _isLoggedIn = false;
 
   @override
   void initState() {
@@ -42,14 +44,19 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _checkSettings() async {
     final isConfigured = await SettingsService.isOAuthConfigured();
+    final isLoggedIn =
+        isConfigured ? await SettingsService.isLoggedIn() : false;
 
     setState(() {
       _isConfigured = isConfigured;
+      _isLoggedIn = isLoggedIn;
       _isLoading = false;
     });
 
     if (!isConfigured) {
       _showSettingsScreen();
+    } else if (!isLoggedIn) {
+      _showLoginScreen();
     }
   }
 
@@ -65,8 +72,25 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _showLoginScreen() async {
+    if (!mounted) return;
+
+    final result = await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const LoginScreen()));
+
+    if (result == true) {
+      _checkSettings();
+    }
+  }
+
   void _openSettings() {
     _showSettingsScreen();
+  }
+
+  void _logout() async {
+    await SettingsService.logout();
+    _checkSettings();
   }
 
   @override
@@ -81,27 +105,58 @@ class _MyHomePageState extends State<MyHomePage> {
             onPressed: _openSettings,
             tooltip: 'OAuth設定',
           ),
+          if (_isLoggedIn)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: _logout,
+              tooltip: 'ログアウト',
+            ),
         ],
       ),
       body:
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _isConfigured
-              ? _buildHomeContent()
+              ? _isLoggedIn
+                  ? _buildMainContent()
+                  : _buildLoginNeededContent()
               : _buildConfigurationNeededContent(),
     );
   }
 
-  Widget _buildHomeContent() {
+  Widget _buildMainContent() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          const Text('OAuth認証設定が完了しています'),
+          const Text('ログイン成功！メイン画面です'),
           const SizedBox(height: 20),
+          ElevatedButton(onPressed: _logout, child: const Text('ログアウト')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginNeededContent() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          const Icon(Icons.login, size: 64, color: Colors.blue),
+          const SizedBox(height: 16),
+          const Text(
+            'freeeへのログインが必要です',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          const Text('アプリを使用するにはfreeeへログインしてください', textAlign: TextAlign.center),
+          const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: _openSettings,
-            child: const Text('OAuth設定を変更する'),
+            onPressed: _showLoginScreen,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            ),
+            child: const Text('ログイン'),
           ),
         ],
       ),

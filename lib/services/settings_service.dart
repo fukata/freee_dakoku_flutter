@@ -1,8 +1,28 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'package:oauth2_client/oauth2_client.dart';
+import 'package:oauth2_client/oauth2_helper.dart';
+import 'package:oauth2_client/access_token_response.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class FreeeOAuth2Client extends OAuth2Client {
+  FreeeOAuth2Client()
+    : super(
+        authorizeUrl:
+            'https://accounts.secure.freee.co.jp/public_api/authorize',
+        tokenUrl: 'https://accounts.secure.freee.co.jp/public_api/token',
+        redirectUri: 'freeedakoku://callback',
+        customUriScheme: 'freeedakoku',
+      );
+}
 
 class SettingsService {
   static const String clientIdKey = 'oauth_client_id';
   static const String clientSecretKey = 'oauth_client_secret';
+  static const String accessTokenKey = 'oauth_access_token';
+  static const String refreshTokenKey = 'oauth_refresh_token';
+  static const String tokenExpiryKey = 'oauth_token_expiry';
 
   // ClientIDを保存
   static Future<bool> saveClientId(String clientId) async {
@@ -38,10 +58,187 @@ class SettingsService {
         clientSecret.isNotEmpty;
   }
 
+  // アクセストークンを保存
+  static Future<bool> saveAccessToken(String token, int expiresIn) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final expiry = DateTime.now().millisecondsSinceEpoch + (expiresIn * 1000);
+    await prefs.setString(accessTokenKey, token);
+    return prefs.setInt(tokenExpiryKey, expiry);
+  }
+
+  // リフレッシュトークンを保存
+  static Future<bool> saveRefreshToken(String token) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setString(refreshTokenKey, token);
+  }
+
+  // アクセストークンを取得
+  static Future<String?> getAccessToken() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(accessTokenKey);
+  }
+
+  // リフレッシュトークンを取得
+  static Future<String?> getRefreshToken() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(refreshTokenKey);
+  }
+
+  // トークンの有効期限を取得
+  static Future<int?> getTokenExpiry() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(tokenExpiryKey);
+  }
+
+  // ログイン状態をチェック
+  static Future<bool> isLoggedIn() async {
+    final token = await getAccessToken();
+    final expiry = await getTokenExpiry();
+
+    if (token == null || expiry == null) {
+      return false;
+    }
+
+    // トークンが有効期限切れでないかチェック
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now >= expiry) {
+      // トークンが期限切れの場合はリフレッシュを試みる
+      try {
+        final refreshed = await refreshAccessToken();
+        return refreshed;
+      } catch (e) {
+        debugPrint('Token refresh failed: $e');
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // OAuth2 Helper を取得
+  static Future<OAuth2Helper> _getOAuth2Helper() async {
+    final clientId = await getClientId();
+    final clientSecret = await getClientSecret();
+
+    if (clientId == null || clientSecret == null) {
+      throw Exception('OAuth credentials not configured');
+    }
+
+    final oauth2Client = FreeeOAuth2Client();
+    return OAuth2Helper(
+      oauth2Client,
+      clientId: clientId,
+      clientSecret: clientSecret,
+      scopes: ['read'],
+      // カスタムパラメータを設定 (removed as it is not supported)
+    );
+  }
+
+  // ログインを実行
+  static Future<bool> performLogin() async {
+    try {
+      if (!await isOAuthConfigured()) return false;
+
+      final oauth2Helper = await _getOAuth2Helper();
+      final accessToken = await oauth2Helper.getToken();
+
+      if (accessToken != null) {
+        await saveAccessToken(
+          accessToken.accessToken!,
+          accessToken.expiresIn ?? 3600,
+        );
+
+        if (accessToken.refreshToken != null) {
+          await saveRefreshToken(accessToken.refreshToken!);
+        }
+
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Login error: $e');
+      return false;
+    }
+  }
+
+  // 認証コードをトークンに交換
+  static Future<bool> exchangeCodeForToken(
+    String code,
+    String redirectUrl,
+  ) async {
+    try {
+      final clientId = await getClientId();
+      final clientSecret = await getClientSecret();
+      if (clientId == null || clientSecret == null) return false;
+
+      final response = await http.post(
+        Uri.parse('https://accounts.secure.freee.co.jp/public_api/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'grant_type': 'authorization_code',
+          'code': code,
+          'redirect_uri': redirectUrl,
+          'client_id': clientId,
+          'client_secret': clientSecret,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        await saveAccessToken(data['access_token'], data['expires_in']);
+        await saveRefreshToken(data['refresh_token']);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Token exchange error: $e');
+      return false;
+    }
+  }
+
+  // アクセストークンをリフレッシュ
+  static Future<bool> refreshAccessToken() async {
+    try {
+      final oauth2Helper = await _getOAuth2Helper();
+      final refreshToken = await getRefreshToken();
+      if (refreshToken == null) {
+        throw Exception('Refresh token not available');
+      }
+      final accessToken = await oauth2Helper.refreshToken(
+        AccessTokenResponse(),
+      );
+
+      await saveAccessToken(
+        accessToken.accessToken!,
+        accessToken.expiresIn ?? 3600,
+      );
+
+      if (accessToken.refreshToken != null) {
+        await saveRefreshToken(accessToken.refreshToken!);
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Token refresh error: $e');
+      return false;
+    }
+  }
+
+  // ログアウト
+  static Future<bool> logout() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(accessTokenKey);
+    await prefs.remove(refreshTokenKey);
+    return prefs.remove(tokenExpiryKey);
+  }
+
   // 設定をクリア
   static Future<bool> clearSettings() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.remove(clientIdKey);
-    return prefs.remove(clientSecretKey);
+    await prefs.remove(clientSecretKey);
+    await prefs.remove(accessTokenKey);
+    await prefs.remove(refreshTokenKey);
+    return prefs.remove(tokenExpiryKey);
   }
 }
