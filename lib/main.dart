@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:io';
 import 'services/settings_service.dart';
 import 'services/notification_service.dart';
 import 'screens/oauth_settings_screen.dart';
@@ -8,9 +9,32 @@ import 'screens/login_screen.dart';
 import 'screens/user_profile_screen.dart';
 import 'screens/app_settings_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize window_manager for desktop platforms
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    try {
+      await windowManager.ensureInitialized();
+
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(500, 700),
+        center: true,
+        title: 'freee打刻アプリ',
+      );
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    } catch (e) {
+      // Handle exception for mobile platforms or if window_manager isn't available
+      debugPrint('Window manager initialization failed: $e');
+    }
+  }
+
   runApp(const MyApp());
 }
 

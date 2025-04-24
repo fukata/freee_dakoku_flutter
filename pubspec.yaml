@@ -43,6 +43,7 @@ dependencies:
   process_run: ^0.14.1
   path_provider: ^2.1.4
   path: ^1.9.0
+  window_manager: ^0.3.7  # Added for controlling window size
 
 dev_dependencies:
   flutter_test:

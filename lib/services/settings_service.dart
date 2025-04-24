@@ -84,6 +84,16 @@ class HrCompanyInfo {
       displayName: json['display_name'] ?? '',
     );
   }
+
+  // Implement equality based on the id field
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is HrCompanyInfo && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class HrUserInfo {
