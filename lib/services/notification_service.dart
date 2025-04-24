@@ -161,7 +161,8 @@ class NotificationService {
     required String title,
     required String body,
     String? payload,
-    bool includeActions = false,
+    bool includeActionClockIn = false,
+    bool includeActionClockOut = false,
   }) async {
     // Android notification with actions if requested
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
@@ -171,13 +172,10 @@ class NotificationService {
           channelDescription: 'Notifications from Freee Dakoku app',
           importance: Importance.max,
           priority: Priority.high,
-          actions:
-              includeActions
-                  ? [
-                    const AndroidNotificationAction(clockInActionId, '出勤'),
-                    const AndroidNotificationAction(clockOutActionId, '退勤'),
-                  ]
-                  : null,
+          actions: _buildAndroidActions(
+            includeActionClockIn,
+            includeActionClockOut,
+          ),
         );
 
     // iOS notification with category ID for actions if requested
@@ -186,18 +184,18 @@ class NotificationService {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          categoryIdentifier: includeActions ? 'freee_dakoku_category' : null,
+          categoryIdentifier:
+              (includeActionClockIn || includeActionClockOut)
+                  ? 'freee_dakoku_category'
+                  : null,
         );
 
     final LinuxNotificationDetails linuxPlatformChannelSpecifics =
         LinuxNotificationDetails(
-          actions:
-              includeActions
-                  ? [
-                    LinuxNotificationAction(key: clockInActionId, label: '出勤'),
-                    LinuxNotificationAction(key: clockOutActionId, label: '退勤'),
-                  ]
-                  : [],
+          actions: _buildLinuxActions(
+            includeActionClockIn,
+            includeActionClockOut,
+          ),
         );
 
     final NotificationDetails platformChannelSpecifics = NotificationDetails(
@@ -213,6 +211,46 @@ class NotificationService {
       platformChannelSpecifics,
       payload: payload,
     );
+  }
+
+  // Helper method to build Android notification actions based on which actions are enabled
+  List<AndroidNotificationAction>? _buildAndroidActions(
+    bool includeClockIn,
+    bool includeClockOut,
+  ) {
+    if (!includeClockIn && !includeClockOut) {
+      return null;
+    }
+
+    final List<AndroidNotificationAction> actions = [];
+
+    if (includeClockIn) {
+      actions.add(const AndroidNotificationAction(clockInActionId, '出勤'));
+    }
+
+    if (includeClockOut) {
+      actions.add(const AndroidNotificationAction(clockOutActionId, '退勤'));
+    }
+
+    return actions;
+  }
+
+  // Helper method to build Linux notification actions based on which actions are enabled
+  List<LinuxNotificationAction> _buildLinuxActions(
+    bool includeClockIn,
+    bool includeClockOut,
+  ) {
+    final List<LinuxNotificationAction> actions = [];
+
+    if (includeClockIn) {
+      actions.add(LinuxNotificationAction(key: clockInActionId, label: '出勤'));
+    }
+
+    if (includeClockOut) {
+      actions.add(LinuxNotificationAction(key: clockOutActionId, label: '退勤'));
+    }
+
+    return actions;
   }
 
   // Updated reminder methods to include actions in notifications
@@ -242,7 +280,7 @@ class NotificationService {
         id: clockInNotificationId,
         title: '出勤打刻リマインダー',
         body: '出勤打刻がまだ行われていません。打刻を行ってください。',
-        includeActions: true, // Add action buttons
+        includeActionClockIn: true, // Add clock-in action button
       );
     });
   }
@@ -274,7 +312,7 @@ class NotificationService {
           id: clockOutNotificationId,
           title: '退勤打刻リマインダー',
           body: '退勤打刻がまだ行われていません。打刻を行ってください。',
-          includeActions: true, // Add action buttons
+          includeActionClockOut: true, // Add clock-out action button
         );
       },
     );
@@ -297,7 +335,8 @@ class NotificationService {
       id: testNotificationId,
       title: 'テスト通知',
       body: 'これはテスト通知です。通知システムが正常に動作しています。',
-      includeActions: includeActions,
+      includeActionClockIn: includeActions,
+      includeActionClockOut: includeActions,
     );
   }
 }

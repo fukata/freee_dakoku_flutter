@@ -455,7 +455,8 @@ class _MyHomePageState extends State<MyHomePage> {
         id: NotificationService.clockInNotificationId,
         title: '出勤打刻リマインダー',
         body: '出勤時間を過ぎています。出勤打刻を行ってください。',
-        includeActions: true, // アクションボタンを含める
+        includeActionClockIn: true, // 出勤アクションを含める
+        includeActionClockOut: false, // 退勤アクションは含めない
       );
 
       // 定期的なリマインダーを開始
@@ -472,7 +473,8 @@ class _MyHomePageState extends State<MyHomePage> {
         id: NotificationService.clockOutNotificationId,
         title: '退勤打刻リマインダー',
         body: '終業時間を過ぎています。退勤打刻を行ってください。',
-        includeActions: true, // アクションボタンを含める
+        includeActionClockIn: false, // 出勤アクションは含めない
+        includeActionClockOut: true, // 退勤アクションを含める
       );
 
       // 定期的なリマインダーを開始
