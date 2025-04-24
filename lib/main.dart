@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'dart:io';
 import 'services/settings_service.dart';
 import 'services/notification_service.dart';
 import 'screens/oauth_settings_screen.dart';
@@ -9,28 +8,9 @@ import 'screens/login_screen.dart';
 import 'screens/user_profile_screen.dart';
 import 'screens/app_settings_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:window_size/window_size.dart' as window_size;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Set fixed window size for desktop platforms
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    window_size.setWindowTitle('freee打刻アプリ');
-    window_size.setWindowMinSize(const Size(600, 900));
-    window_size.setWindowMaxSize(const Size(600, 900));
-    window_size.getCurrentScreen().then((screen) {
-      if (screen != null) {
-        final screenFrame = screen.visibleFrame;
-        final width = 600.0;
-        final height = 900.0;
-        final left = ((screenFrame.width - width) / 2).roundToDouble();
-        final top = ((screenFrame.height - height) / 3).roundToDouble();
-        window_size.setWindowFrame(Rect.fromLTWH(left, top, width, height));
-      }
-    });
-  }
-
   runApp(const MyApp());
 }
 
