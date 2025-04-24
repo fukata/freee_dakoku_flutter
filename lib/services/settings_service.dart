@@ -324,9 +324,13 @@ class SettingsService {
       if (refreshToken == null) {
         throw Exception('Refresh token not available');
       }
-      final accessToken = await oauth2Helper.refreshToken(
-        AccessTokenResponse(),
-      );
+
+      // 現在のトークン情報を持つAccessTokenResponseを作成
+      final currentToken = AccessTokenResponse.fromMap({
+        'refresh_token': refreshToken,
+      });
+
+      final accessToken = await oauth2Helper.refreshToken(currentToken);
 
       await saveAccessToken(
         accessToken.accessToken!,
