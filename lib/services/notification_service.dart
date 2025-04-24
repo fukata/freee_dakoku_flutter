@@ -3,6 +3,7 @@ import 'dart:async';
 import '../services/settings_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 // Function type definition for notification tap callback
 typedef NotificationTapCallback = void Function();
@@ -21,6 +22,9 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  // Audio player for notification sounds
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   // Timer for recurring notifications
   Timer? _clockInReminderTimer;
@@ -43,6 +47,39 @@ class NotificationService {
   // Set callback for notification actions
   void setOnNotificationAction(NotificationActionCallback callback) {
     _onNotificationAction = callback;
+  }
+
+  // Play notification sound based on notification type
+  Future<void> _playNotificationSound(int notificationId) async {
+    try {
+      // Check if sound notifications are enabled
+      final bool enableSoundNotifications =
+          await SettingsService.getEnableSoundNotifications();
+
+      if (enableSoundNotifications) {
+        String soundAsset;
+
+        // Select sound based on notification ID
+        if (notificationId == clockInNotificationId) {
+          // Clock-in notification sound
+          soundAsset = 'clock_in_001.wav';
+        } else if (notificationId == clockOutNotificationId) {
+          // Clock-out notification sound
+          soundAsset = 'clock_out_001.wav';
+        } else {
+          // Default notification sound
+          soundAsset = 'notification.mp3';
+        }
+
+        // Play the selected sound
+        await _audioPlayer.play(
+          AssetSource(soundAsset),
+          mode: PlayerMode.lowLatency,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error playing notification sound: $e');
+    }
   }
 
   Future<void> init() async {
@@ -211,6 +248,9 @@ class NotificationService {
       platformChannelSpecifics,
       payload: payload,
     );
+
+    // Play notification sound
+    await _playNotificationSound(id);
   }
 
   // Helper method to build Android notification actions based on which actions are enabled

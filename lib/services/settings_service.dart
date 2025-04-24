@@ -5,6 +5,7 @@ import 'package:oauth2_client/oauth2_helper.dart';
 import 'package:oauth2_client/access_token_response.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
 
 class FreeeOAuth2Client extends OAuth2Client {
   FreeeOAuth2Client()
@@ -150,6 +151,8 @@ class SettingsService {
   static const String endWorkTimeKey = 'end_work_time';
   static const String enableNotificationsKey = 'enable_notifications';
   static const String notificationIntervalKey = 'notification_interval';
+  static const String enableSoundNotificationsKey =
+      'enable_sound_notifications';
 
   // Keys for company settings
   static const String selectedCompanyIdKey = 'selected_company_id';
@@ -604,6 +607,17 @@ class SettingsService {
     return prefs.getInt(notificationIntervalKey) ?? 15; // Default is 15 minutes
   }
 
+  // Sound Notification Settings
+  static Future<bool> saveEnableSoundNotifications(bool enable) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setBool(enableSoundNotificationsKey, enable);
+  }
+
+  static Future<bool> getEnableSoundNotifications() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(enableSoundNotificationsKey) ?? false;
+  }
+
   // Company Selection
   static Future<bool> saveSelectedCompanyId(int companyId) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -613,6 +627,33 @@ class SettingsService {
   static Future<int?> getSelectedCompanyId() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getInt(selectedCompanyIdKey);
+  }
+
+  // Sound notification test methods
+  static Future<void> testClockInSound() async {
+    try {
+      // Use AudioPlayer to play the clock-in sound
+      final AudioPlayer audioPlayer = AudioPlayer();
+      await audioPlayer.play(
+        AssetSource('clock_in_001.wav'),
+        mode: PlayerMode.lowLatency,
+      );
+    } catch (e) {
+      debugPrint('Error playing clock-in sound: $e');
+    }
+  }
+
+  static Future<void> testClockOutSound() async {
+    try {
+      // Use AudioPlayer to play the clock-out sound
+      final AudioPlayer audioPlayer = AudioPlayer();
+      await audioPlayer.play(
+        AssetSource('clock_out_001.wav'),
+        mode: PlayerMode.lowLatency,
+      );
+    } catch (e) {
+      debugPrint('Error playing clock-out sound: $e');
+    }
   }
 
   // 人事労務APIからユーザー情報を取得

@@ -13,6 +13,7 @@ class AppSettingsScreen extends StatefulWidget {
 class _AppSettingsScreenState extends State<AppSettingsScreen> {
   bool _isAutoStart = false;
   bool _enableNotifications = true;
+  bool _enableSoundNotifications = false;
   String _startWorkTime = '09:00';
   String _endWorkTime = '18:00';
   int _notificationInterval = 15; // Default to 15 minutes
@@ -38,6 +39,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final enableNotifications = await SettingsService.getEnableNotifications();
     final notificationInterval =
         await SettingsService.getNotificationInterval();
+    final enableSoundNotifications =
+        await SettingsService.getEnableSoundNotifications();
 
     // Check if auto-start is actually enabled in the system
     final autoStartEnabled = await AutoStartService.isAutoStartEnabled();
@@ -54,6 +57,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       _startWorkTime = startTime;
       _endWorkTime = endTime;
       _enableNotifications = enableNotifications;
+      _enableSoundNotifications = enableSoundNotifications;
       _notificationInterval = notificationInterval;
       _isLoading = false;
     });
@@ -71,6 +75,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         await SettingsService.getEnableNotifications();
     final previousNotificationInterval =
         await SettingsService.getNotificationInterval();
+    final previousEnableSoundNotifications =
+        await SettingsService.getEnableSoundNotifications();
 
     // First apply auto-start setting at OS level
     await AutoStartService.setAutoStart(_isAutoStart);
@@ -81,6 +87,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     await SettingsService.saveEndWorkTime(_endWorkTime);
     await SettingsService.saveEnableNotifications(_enableNotifications);
     await SettingsService.saveNotificationInterval(_notificationInterval);
+    await SettingsService.saveEnableSoundNotifications(
+      _enableSoundNotifications,
+    );
 
     setState(() {
       _isLoading = false;
@@ -99,6 +108,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       'notificationsChanged':
           _enableNotifications != previousEnableNotifications ||
           _notificationInterval != previousNotificationInterval,
+      'soundNotificationsChanged':
+          _enableSoundNotifications != previousEnableSoundNotifications,
     };
 
     Navigator.of(context).pop(changedSettings); // 変更された設定情報を通知
@@ -242,6 +253,17 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                                 });
                               },
                             ),
+                            const SizedBox(height: 8),
+                            SwitchListTile(
+                              title: const Text('通知音を有効にする'),
+                              subtitle: const Text('通知時に音を鳴らします'),
+                              value: _enableSoundNotifications,
+                              onChanged: (value) {
+                                setState(() {
+                                  _enableSoundNotifications = value;
+                                });
+                              },
+                            ),
                             const SizedBox(height: 16),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -288,6 +310,58 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            _enableSoundNotifications
+                                ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '通知音テスト',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ElevatedButton(
+                                            onPressed: () async {
+                                              await SettingsService.testClockInSound();
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 12.0,
+                                                  ),
+                                            ),
+                                            child: const Text(
+                                              '出勤音をテスト',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: ElevatedButton(
+                                            onPressed: () async {
+                                              await SettingsService.testClockOutSound();
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 12.0,
+                                                  ),
+                                            ),
+                                            child: const Text(
+                                              '退勤音をテスト',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                )
+                                : Container(),
                           ],
                         ),
                       ),
