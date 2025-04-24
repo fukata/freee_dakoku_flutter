@@ -43,6 +43,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isConfigured = false;
   bool _isLoggedIn = false;
   UserInfo? _userInfo;
+  HrCompanyInfo? _selectedCompany; // 選択中の事業所
   final NotificationService _notificationService = NotificationService();
   DateTime _currentDateTime = DateTime.now();
   Timer? _timer;
@@ -67,8 +68,11 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    _initializeApp();
-    _setupTimers();
+    // Initialize the app and set up timers
+    () async {
+      await _initializeApp();
+      await _setupTimers();
+    }();
   }
 
   @override
@@ -94,7 +98,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // タイマーのセットアップを行う
-  void _setupTimers() {
+  Future<void> _setupTimers() {
     // 既存のタイマーがあればキャンセル
     _timer?.cancel();
     _workScheduleCheckTimer?.cancel();
@@ -115,6 +119,8 @@ class _MyHomePageState extends State<MyHomePage> {
         _fetchLatestTimeClocks();
       }
     });
+
+    return Future.value();
   }
 
   // 設定の変更をチェックし、変更があればタイマーをリセット
@@ -197,15 +203,21 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (isLoggedIn) {
       // ログイン済みの場合はユーザー情報を取得
-      final userInfo = await SettingsService.getUserInfo();
-
-      // 最新の打刻情報を取得
-      await _fetchLatestTimeClocks();
+      final userInfo = await SettingsService.getFullUserInfo();
 
       setState(() {
         _isConfigured = isConfigured;
         _isLoggedIn = isLoggedIn;
         _userInfo = userInfo;
+      });
+
+      // ユーザー情報を設定した後に事業所選択を初期化する
+      await _initializeCompanySelection();
+
+      // 事業所選択後に最新の打刻情報を取得
+      await _fetchLatestTimeClocks();
+
+      setState(() {
         _isLoading = false;
       });
     } else {
@@ -225,7 +237,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _fetchLatestTimeClocks() async {
     try {
-      final timeClocks = await SettingsService.getLatestTimeClocks();
+      // 選択された事業所を引数として渡す
+      final timeClocks = await SettingsService.getLatestTimeClocks(
+        selectedCompany: _selectedCompany,
+      );
 
       if (timeClocks == null) {
         setState(() {
@@ -353,7 +368,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // 仕事の予定と通知の必要性をチェック
-  void _checkWorkScheduleAndNotifications() async {
+  Future<void> _checkWorkScheduleAndNotifications() async {
     if (!_isLoggedIn || !_enableNotifications) return;
 
     final now = DateTime.now();
@@ -428,6 +443,46 @@ class _MyHomePageState extends State<MyHomePage> {
     } else if (hasCheckedOut) {
       // 退勤打刻済みならリマインダーを停止
       _notificationService.cancelClockOutReminder();
+    }
+  }
+
+  // 事業所を選択する
+  Future<void> _selectCompany(HrCompanyInfo? company) async {
+    setState(() {
+      _selectedCompany = company;
+    });
+
+    // 選択された事業所に応じてデータを再読み込み
+    if (company != null) {
+      debugPrint('Company switched to: ${company.name}');
+
+      // 選択した事業所IDを保存
+      await SettingsService.saveSelectedCompanyId(company.id);
+    }
+  }
+
+  // 初期の事業所選択を行う
+  Future<void> _initializeCompanySelection() async {
+    if (_userInfo?.hr != null &&
+        _userInfo!.hr!.companies.isNotEmpty &&
+        _selectedCompany == null) {
+      // 保存された事業所IDを取得
+      final savedCompanyId = await SettingsService.getSelectedCompanyId();
+
+      if (savedCompanyId != null) {
+        // 保存された事業所IDに一致する事業所を探す
+        final savedCompany = _userInfo!.hr!.companies.firstWhere(
+          (company) => company.id == savedCompanyId,
+          orElse: () => _userInfo!.hr!.companies.first, // 見つからない場合は最初の事業所
+        );
+
+        // 保存されていた事業所を選択
+        _selectCompany(savedCompany);
+        debugPrint('Loaded saved company: ${savedCompany.name}');
+      } else {
+        // 保存された事業所IDがない場合は最初の事業所を選択
+        _selectCompany(_userInfo!.hr!.companies.first);
+      }
     }
   }
 
@@ -511,37 +566,81 @@ class _MyHomePageState extends State<MyHomePage> {
         if (_userInfo != null) ...[
           Container(
             padding: const EdgeInsets.all(16),
-            child: Row(
+            child: Column(
               children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor: Theme.of(context).primaryColor,
-                  child: Text(
-                    _getInitials(_userInfo!.displayName),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text(
-                      _userInfo!.displayName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    CircleAvatar(
+                      radius: 25,
+                      backgroundColor: Theme.of(context).primaryColor,
+                      child: Text(
+                        _getInitials(_userInfo!.displayName),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                    Text(
-                      _userInfo!.email,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _userInfo!.displayName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            _userInfo!.email,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+
+                // 事業所選択ドロップダウン
+                if (_userInfo?.hr != null &&
+                    _userInfo!.hr!.companies.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButton<HrCompanyInfo>(
+                      value: _selectedCompany,
+                      isExpanded: true,
+                      underline: Container(), // 下線を削除
+                      hint: const Text('事業所を選択'),
+                      items:
+                          _userInfo!.hr!.companies.map((company) {
+                            return DropdownMenuItem<HrCompanyInfo>(
+                              value: company,
+                              child: Text(company.name),
+                            );
+                          }).toList(),
+                      onChanged: (HrCompanyInfo? newValue) async {
+                        await _selectCompany(newValue);
+
+                        // 最新の打刻情報を再取得
+                        await _fetchLatestTimeClocks();
+
+                        // 打刻状態と通知の必要性をチェック
+                        await _checkWorkScheduleAndNotifications();
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -673,7 +772,10 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     try {
-      final success = await SettingsService.clockIn();
+      // 選択された事業所を引数として渡す
+      final success = await SettingsService.clockIn(
+        selectedCompany: _selectedCompany,
+      );
 
       if (success) {
         ScaffoldMessenger.of(
@@ -720,7 +822,10 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     try {
-      final success = await SettingsService.clockOut();
+      // 選択された事業所を引数として渡す
+      final success = await SettingsService.clockOut(
+        selectedCompany: _selectedCompany,
+      );
 
       if (success) {
         ScaffoldMessenger.of(

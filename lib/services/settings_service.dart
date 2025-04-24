@@ -23,6 +23,7 @@ class UserInfo {
   final String displayName;
   final String? firstName;
   final String? lastName;
+  final HrUserInfo? hr; // HR関連のユーザー情報
 
   UserInfo({
     required this.id,
@@ -30,6 +31,7 @@ class UserInfo {
     required this.displayName,
     this.firstName,
     this.lastName,
+    this.hr,
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
@@ -40,6 +42,64 @@ class UserInfo {
       firstName: json['first_name'],
       lastName: json['last_name'],
     );
+  }
+
+  // HR情報を追加するためのコピーメソッド
+  UserInfo copyWithHr(HrUserInfo hrUserInfo) {
+    return UserInfo(
+      id: this.id,
+      email: this.email,
+      displayName: this.displayName,
+      firstName: this.firstName,
+      lastName: this.lastName,
+      hr: hrUserInfo,
+    );
+  }
+}
+
+class HrCompanyInfo {
+  final int id;
+  final String name;
+  final String role;
+  final String externalCid;
+  final int employeeId;
+  final String displayName;
+
+  HrCompanyInfo({
+    required this.id,
+    required this.name,
+    required this.role,
+    required this.externalCid,
+    required this.employeeId,
+    required this.displayName,
+  });
+
+  factory HrCompanyInfo.fromJson(Map<String, dynamic> json) {
+    return HrCompanyInfo(
+      id: json['id'] ?? 0,
+      name: json['name'] ?? '',
+      role: json['role'] ?? '',
+      externalCid: json['external_cid'] ?? '',
+      employeeId: json['employee_id'] ?? 0,
+      displayName: json['display_name'] ?? '',
+    );
+  }
+}
+
+class HrUserInfo {
+  final int id;
+  final List<HrCompanyInfo> companies;
+
+  HrUserInfo({required this.id, required this.companies});
+
+  factory HrUserInfo.fromJson(Map<String, dynamic> json) {
+    final List<dynamic> companiesJson = json['companies'] ?? [];
+    final List<HrCompanyInfo> companies =
+        companiesJson
+            .map<HrCompanyInfo>((company) => HrCompanyInfo.fromJson(company))
+            .toList();
+
+    return HrUserInfo(id: json['id'] ?? 0, companies: companies);
   }
 }
 
@@ -80,6 +140,9 @@ class SettingsService {
   static const String endWorkTimeKey = 'end_work_time';
   static const String enableNotificationsKey = 'enable_notifications';
   static const String notificationIntervalKey = 'notification_interval';
+
+  // Keys for company settings
+  static const String selectedCompanyIdKey = 'selected_company_id';
 
   // ClientIDを保存
   static Future<bool> saveClientId(String clientId) async {
@@ -333,22 +396,43 @@ class SettingsService {
   }
 
   // 最新の打刻情報を取得
-  static Future<List<TimeClock>?> getLatestTimeClocks() async {
+  static Future<List<TimeClock>?> getLatestTimeClocks({
+    HrCompanyInfo? selectedCompany,
+  }) async {
     try {
       final accessToken = await getAccessToken();
       if (accessToken == null) return null;
 
-      // 現在のユーザー情報を取得
-      final userInfo = await getUserInfo();
-      if (userInfo == null) return null;
+      // 選択された事業所がない場合はユーザー情報を取得
+      int employeeId;
+      if (selectedCompany != null) {
+        employeeId = selectedCompany.employeeId;
+      } else {
+        // 現在のユーザー情報を取得し、HR情報がなければ失敗
+        final userInfo = await getFullUserInfo();
+        if (userInfo == null ||
+            userInfo.hr == null ||
+            userInfo.hr!.companies.isEmpty)
+          return null;
 
+        // 最初の事業所のemployee_idを使う（後方互換性のため）
+        employeeId = userInfo.hr!.companies.first.employeeId;
+      }
+
+      // 1ヶ月前の日付を取得
       final now = DateTime.now();
-      final baseDate =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final fromDate = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: 30));
+      final formattedFromDate =
+          '${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}';
+      final companyId = selectedCompany?.id ?? 0;
 
       final response = await http.get(
         Uri.parse(
-          'https://api.freee.co.jp/hr/api/v1/employees/${userInfo.id}/time_clocks?date=$baseDate',
+          'https://api.freee.co.jp/hr/api/v1/employees/$employeeId/time_clocks?from_date=$formattedFromDate&company_id=$companyId',
         ),
         headers: {
           'Authorization': 'Bearer $accessToken',
@@ -358,7 +442,7 @@ class SettingsService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final List<dynamic> timeClockList = data['time_clocks'];
+        final List<dynamic> timeClockList = data;
         return timeClockList
             .map<TimeClock>((tc) => TimeClock.fromJson(tc))
             .toList();
@@ -367,7 +451,7 @@ class SettingsService {
         final refreshed = await refreshAccessToken();
         if (refreshed) {
           // リフレッシュに成功したら再度APIを呼び出す
-          return getLatestTimeClocks();
+          return getLatestTimeClocks(selectedCompany: selectedCompany);
         }
       }
       debugPrint('Failed to get time clocks: ${response.statusCode}');
@@ -379,18 +463,30 @@ class SettingsService {
   }
 
   // 出勤打刻を実行
-  static Future<bool> clockIn() async {
+  static Future<bool> clockIn({HrCompanyInfo? selectedCompany}) async {
     try {
       final accessToken = await getAccessToken();
       if (accessToken == null) return false;
 
-      // 現在のユーザー情報を取得
-      final userInfo = await getUserInfo();
-      if (userInfo == null) return false;
+      // 選択された事業所がない場合はユーザー情報を取得
+      int employeeId;
+      if (selectedCompany != null) {
+        employeeId = selectedCompany.employeeId;
+      } else {
+        // 現在のユーザー情報を取得し、HR情報がなければ失敗
+        final userInfo = await getFullUserInfo();
+        if (userInfo == null ||
+            userInfo.hr == null ||
+            userInfo.hr!.companies.isEmpty)
+          return false;
+
+        // 最初の事業所のemployee_idを使う（後方互換性のため）
+        employeeId = userInfo.hr!.companies.first.employeeId;
+      }
 
       final response = await http.post(
         Uri.parse(
-          'https://api.freee.co.jp/hr/api/v1/employees/${userInfo.id}/time_clocks',
+          'https://api.freee.co.jp/hr/api/v1/employees/$employeeId/time_clocks',
         ),
         headers: {
           'Authorization': 'Bearer $accessToken',
@@ -407,18 +503,30 @@ class SettingsService {
   }
 
   // 退勤打刻を実行
-  static Future<bool> clockOut() async {
+  static Future<bool> clockOut({HrCompanyInfo? selectedCompany}) async {
     try {
       final accessToken = await getAccessToken();
       if (accessToken == null) return false;
 
-      // 現在のユーザー情報を取得
-      final userInfo = await getUserInfo();
-      if (userInfo == null) return false;
+      // 選択された事業所がない場合はユーザー情報を取得
+      int employeeId;
+      if (selectedCompany != null) {
+        employeeId = selectedCompany.employeeId;
+      } else {
+        // 現在のユーザー情報を取得し、HR情報がなければ失敗
+        final userInfo = await getFullUserInfo();
+        if (userInfo == null ||
+            userInfo.hr == null ||
+            userInfo.hr!.companies.isEmpty)
+          return false;
+
+        // 最初の事業所のemployee_idを使う（後方互換性のため）
+        employeeId = userInfo.hr!.companies.first.employeeId;
+      }
 
       final response = await http.post(
         Uri.parse(
-          'https://api.freee.co.jp/hr/api/v1/employees/${userInfo.id}/time_clocks',
+          'https://api.freee.co.jp/hr/api/v1/employees/$employeeId/time_clocks',
         ),
         headers: {
           'Authorization': 'Bearer $accessToken',
@@ -488,5 +596,74 @@ class SettingsService {
   static Future<int> getNotificationInterval() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getInt(notificationIntervalKey) ?? 15; // Default is 15 minutes
+  }
+
+  // Company Selection
+  static Future<bool> saveSelectedCompanyId(int companyId) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.setInt(selectedCompanyIdKey, companyId);
+  }
+
+  static Future<int?> getSelectedCompanyId() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(selectedCompanyIdKey);
+  }
+
+  // 人事労務APIからユーザー情報を取得
+  static Future<HrUserInfo?> getHrUserInfo() async {
+    try {
+      final accessToken = await getAccessToken();
+      if (accessToken == null) return null;
+
+      final response = await http.get(
+        Uri.parse('https://api.freee.co.jp/hr/api/v1/users/me'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // APIレスポンスは直接HrUserInfoに変換できる形式
+        return HrUserInfo.fromJson(data);
+      } else if (response.statusCode == 401) {
+        // アクセストークンの期限切れの場合、リフレッシュを試みる
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          // リフレッシュに成功したら再度APIを呼び出す
+          return getHrUserInfo();
+        }
+      }
+      debugPrint(
+        'Failed to get HR user info: ${response.statusCode} ${response.body}',
+      );
+      return null;
+    } catch (e) {
+      debugPrint('Error getting HR user info: $e');
+      return null;
+    }
+  }
+
+  // 通常のユーザー情報とHRユーザー情報の両方を取得
+  static Future<UserInfo?> getFullUserInfo() async {
+    try {
+      // まず通常のユーザー情報を取得
+      final userInfo = await getUserInfo();
+      if (userInfo == null) return null;
+
+      // 次にHRユーザー情報を取得
+      final hrUserInfo = await getHrUserInfo();
+
+      // HR情報をセットして返す（HR情報がない場合はそのまま返す）
+      if (hrUserInfo != null) {
+        return userInfo.copyWithHr(hrUserInfo);
+      }
+
+      return userInfo;
+    } catch (e) {
+      debugPrint('Error getting full user info: $e');
+      return null;
+    }
   }
 }
