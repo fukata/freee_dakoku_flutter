@@ -463,26 +463,22 @@ class SettingsService {
   }
 
   // 出勤打刻を実行
-  static Future<bool> clockIn({HrCompanyInfo? selectedCompany}) async {
+  static Future<bool> clockIn({
+    required HrCompanyInfo selectedCompany,
+    required String baseDate,
+    required String datetime,
+  }) async {
     try {
       final accessToken = await getAccessToken();
       if (accessToken == null) return false;
 
       // 選択された事業所がない場合はユーザー情報を取得
-      int employeeId;
-      if (selectedCompany != null) {
-        employeeId = selectedCompany.employeeId;
-      } else {
-        // 現在のユーザー情報を取得し、HR情報がなければ失敗
-        final userInfo = await getFullUserInfo();
-        if (userInfo == null ||
-            userInfo.hr == null ||
-            userInfo.hr!.companies.isEmpty)
-          return false;
+      final employeeId = selectedCompany.employeeId;
 
-        // 最初の事業所のemployee_idを使う（後方互換性のため）
-        employeeId = userInfo.hr!.companies.first.employeeId;
-      }
+      final requestBody = {'type': 'clock_in'};
+      requestBody['company_id'] = selectedCompany.id.toString();
+      // requestBody['base_date'] = baseDate;
+      // requestBody['datetime'] = datetime;
 
       final response = await http.post(
         Uri.parse(
@@ -492,7 +488,7 @@ class SettingsService {
           'Authorization': 'Bearer $accessToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'type': 'clock_in'}),
+        body: jsonEncode(requestBody),
       );
 
       return response.statusCode == 201;
@@ -503,26 +499,22 @@ class SettingsService {
   }
 
   // 退勤打刻を実行
-  static Future<bool> clockOut({HrCompanyInfo? selectedCompany}) async {
+  static Future<bool> clockOut({
+    required HrCompanyInfo selectedCompany,
+    required String baseDate,
+    required String datetime,
+  }) async {
     try {
       final accessToken = await getAccessToken();
       if (accessToken == null) return false;
 
       // 選択された事業所がない場合はユーザー情報を取得
-      int employeeId;
-      if (selectedCompany != null) {
-        employeeId = selectedCompany.employeeId;
-      } else {
-        // 現在のユーザー情報を取得し、HR情報がなければ失敗
-        final userInfo = await getFullUserInfo();
-        if (userInfo == null ||
-            userInfo.hr == null ||
-            userInfo.hr!.companies.isEmpty)
-          return false;
+      final employeeId = selectedCompany.employeeId;
 
-        // 最初の事業所のemployee_idを使う（後方互換性のため）
-        employeeId = userInfo.hr!.companies.first.employeeId;
-      }
+      final requestBody = {'type': 'clock_out'};
+      requestBody['company_id'] = selectedCompany.id.toString();
+      // requestBody['base_date'] = baseDate;
+      // requestBody['datetime'] = datetime;
 
       final response = await http.post(
         Uri.parse(
@@ -532,7 +524,7 @@ class SettingsService {
           'Authorization': 'Bearer $accessToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({'type': 'clock_out'}),
+        body: jsonEncode(requestBody),
       );
 
       return response.statusCode == 201;

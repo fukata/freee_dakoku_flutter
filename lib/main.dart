@@ -71,7 +71,11 @@ class _MyHomePageState extends State<MyHomePage> {
     // Initialize the app and set up timers
     () async {
       await _initializeApp();
-      await _setupTimers();
+      _setupTimers();
+
+      await _checkSettingsChanges();
+      // 毎分、打刻状態と通知の必要性をチェック
+      await _checkWorkScheduleAndNotifications();
     }();
   }
 
@@ -93,12 +97,37 @@ class _MyHomePageState extends State<MyHomePage> {
       _bringAppToForeground();
     });
 
+    // Set up handler for notification action buttons
+    _notificationService.setOnNotificationAction((String actionId) {
+      if (actionId == NotificationService.clockInActionId) {
+        debugPrint('Handling clock-in action from notification');
+        // Check if we can clock in and do it
+        if (_canClockIn && !_isClockActionLoading) {
+          _clockIn();
+        } else {
+          debugPrint(
+            'Cannot clock in right now: enabled=$_canClockIn, loading=$_isClockActionLoading',
+          );
+        }
+      } else if (actionId == NotificationService.clockOutActionId) {
+        debugPrint('Handling clock-out action from notification');
+        // Check if we can clock out and do it
+        if (_canClockOut && !_isClockActionLoading) {
+          _clockOut();
+        } else {
+          debugPrint(
+            'Cannot clock out right now: enabled=$_canClockOut, loading=$_isClockActionLoading',
+          );
+        }
+      }
+    });
+
     await _loadWorkScheduleSettings();
     await _checkSettings();
   }
 
   // タイマーのセットアップを行う
-  Future<void> _setupTimers() {
+  void _setupTimers() {
     // 既存のタイマーがあればキャンセル
     _timer?.cancel();
     _workScheduleCheckTimer?.cancel();
@@ -119,8 +148,6 @@ class _MyHomePageState extends State<MyHomePage> {
         _fetchLatestTimeClocks();
       }
     });
-
-    return Future.value();
   }
 
   // 設定の変更をチェックし、変更があればタイマーをリセット
@@ -403,23 +430,32 @@ class _MyHomePageState extends State<MyHomePage> {
     bool hasCheckedOut = false;
 
     if (_timeClocks != null && _timeClocks!.isNotEmpty) {
-      // 今日の打刻があるかチェック
-      for (var timeClock in _timeClocks!) {
-        if (timeClock.type == 'clock_in') {
-          hasCheckedIn = true;
-        } else if (timeClock.type == 'clock_out') {
-          hasCheckedOut = true;
-        }
+      // 最後の打刻のタイプをチェック
+      final lastTimeClock = _timeClocks!.last;
+      // 現在日時より後かどうか
+      final isAfterNow = lastTimeClock.dateTime!.isAfter(now);
+
+      if (!isAfterNow) {
+        // 現在日時より後の打刻は無視
+        return;
+      }
+
+      // 最後の打刻のタイプを確認
+      if (lastTimeClock.type == 'clock_in') {
+        hasCheckedIn = true;
+      } else if (lastTimeClock.type == 'clock_out') {
+        hasCheckedOut = true;
       }
     }
 
     // 出勤時刻を過ぎているのに打刻がない場合
     if (now.isAfter(startDateTime) && !hasCheckedIn) {
-      // 最初の通知
+      // 最初の通知 (出勤アクション付き)
       await _notificationService.showNotification(
         id: NotificationService.clockInNotificationId,
         title: '出勤打刻リマインダー',
         body: '出勤時間を過ぎています。出勤打刻を行ってください。',
+        includeActions: true, // アクションボタンを含める
       );
 
       // 定期的なリマインダーを開始
@@ -431,11 +467,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
     // 退勤時刻を過ぎているのに出勤中の場合（退勤打刻がない）
     if (now.isAfter(endDateTime) && hasCheckedIn && !hasCheckedOut) {
-      // 最初の通知
+      // 最初の通知 (退勤アクション付き)
       await _notificationService.showNotification(
         id: NotificationService.clockOutNotificationId,
         title: '退勤打刻リマインダー',
         body: '終業時間を過ぎています。退勤打刻を行ってください。',
+        includeActions: true, // アクションボタンを含める
       );
 
       // 定期的なリマインダーを開始
@@ -772,9 +809,14 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     try {
-      // 選択された事業所を引数として渡す
+      final clockInDate =
+          _currentDateTime.toIso8601String().split('T').first; // yyyy-mm-dd
+      final clockInDatetime =
+          '${_currentDateTime.toIso8601String().split('T').join(' ').split('.').first}'; // yyyy-mm-dd hh:mm:ss
       final success = await SettingsService.clockIn(
-        selectedCompany: _selectedCompany,
+        selectedCompany: _selectedCompany!,
+        baseDate: clockInDate,
+        datetime: clockInDatetime,
       );
 
       if (success) {
@@ -822,9 +864,14 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     try {
-      // 選択された事業所を引数として渡す
+      final clockOutDate =
+          _currentDateTime.toIso8601String().split('T').first; // yyyy-mm-dd
+      final clockOutDatetime =
+          '${_currentDateTime.toIso8601String().split('T').join(' ').split('.').first}'; // yyyy-mm-dd hh:mm:ss
       final success = await SettingsService.clockOut(
-        selectedCompany: _selectedCompany,
+        selectedCompany: _selectedCompany!,
+        baseDate: clockOutDate,
+        datetime: clockOutDatetime,
       );
 
       if (success) {
