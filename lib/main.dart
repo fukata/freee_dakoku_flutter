@@ -419,11 +419,22 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  // 土日かどうかを判定する
+  bool _isWeekend(DateTime date) {
+    return date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+  }
+
   // 仕事の予定と通知の必要性をチェック
   Future<void> _checkWorkScheduleAndNotifications() async {
     if (!_isLoggedIn || !_enableNotifications) return;
 
     final now = DateTime.now();
+
+    // 土日の場合は通知をスキップ
+    if (_isWeekend(now)) {
+      debugPrint('Skipping notifications on weekend');
+      return;
+    }
 
     // 勤務開始時間と終了時間を解析
     final startTimeParts = _startWorkTime.split(':');
