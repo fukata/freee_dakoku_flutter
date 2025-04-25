@@ -8,6 +8,7 @@ import 'screens/oauth_settings_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/user_profile_screen.dart';
 import 'screens/app_settings_screen.dart';
+import 'utils/reminder_utils.dart'; // Import the new utility
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -454,13 +455,8 @@ class _MyHomePageState extends State<MyHomePage> {
     bool hasCheckedOut = false;
 
     if (_timeClocks != null && _timeClocks!.isNotEmpty) {
-      // 最後の打刻のタイプをチェック
       final lastTimeClock = _timeClocks!.last;
-      // 現在日時より後かどうか
-      final isAfterNow = lastTimeClock.dateTime!.isAfter(now);
-
-      if (!isAfterNow) {
-        // 現在日時より後の打刻は無視
+      if (ReminderUtils.isSkipReminder(lastTimeClock, now)) {
         return;
       }
 
@@ -852,7 +848,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         // 通知を送信
         await _notificationService.showNotification(
-          id: 1,
+          id: NotificationService.clockInCompletedNotificationId,
           title: '出勤打刻',
           body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に出勤打刻しました',
         );
@@ -907,7 +903,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
         // 通知を送信
         await _notificationService.showNotification(
-          id: 2,
+          id: NotificationService.clockOutCompletedNotificationId,
           title: '退勤打刻',
           body: '${_currentDateTime.hour}時${_currentDateTime.minute}分に退勤打刻しました',
         );

@@ -33,6 +33,8 @@ class NotificationService {
   // Notification IDs
   static const int clockInNotificationId = 1;
   static const int clockOutNotificationId = 2;
+  static const int clockInCompletedNotificationId = 3;
+  static const int clockOutCompletedNotificationId = 4;
   static const int testNotificationId = 999;
 
   // Action IDs
@@ -67,8 +69,7 @@ class NotificationService {
           // Clock-out notification sound
           soundAsset = 'clock_out_001.wav';
         } else {
-          // Default notification sound
-          soundAsset = 'notification.mp3';
+          return;
         }
 
         // Play the selected sound
