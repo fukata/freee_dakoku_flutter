@@ -467,20 +467,32 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (_timeClocks != null && _timeClocks!.isNotEmpty) {
       final lastTimeClock = _timeClocks!.last;
-      if (ReminderUtils.isSkipReminder(lastTimeClock, now)) {
-        return;
-      }
+      final lastTimeClockDateTime = lastTimeClock.dateTime!.toLocal();
+      debugPrint('lastTimeClockDateTime:: $lastTimeClockDateTime, now: ${now}');
+
 
       // 最後の打刻のタイプを確認
       if (lastTimeClock.type == 'clock_in') {
         hasCheckedIn = true;
       } else if (lastTimeClock.type == 'clock_out') {
+        if (ReminderUtils.isSkipReminder(lastTimeClockDateTime, now)) {
+          debugPrint('Skipping reminder: lastTimeClockDateTime is today');
+          return;
+        }
+
         hasCheckedOut = true;
       }
     }
 
+    debugPrint('hasCheckedIn: $hasCheckedIn, hasCheckedOut: $hasCheckedOut, startDateTime: $startDateTime, endDateTime: $endDateTime');
+
     // 出勤時刻を過ぎているのに打刻がない場合
-    if (now.isAfter(startDateTime) && !hasCheckedIn) {
+    final isNeedNotifyForClockIn = ReminderUtils.isNeedNotifyForClockIn(
+      now: now,
+      startDateTime: startDateTime,
+      hasCheckedIn: hasCheckedIn
+    );
+    if (isNeedNotifyForClockIn) {
       // 最初の通知 (出勤アクション付き)
       await _notificationService.showNotification(
         id: NotificationService.clockInNotificationId,
@@ -498,7 +510,13 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     // 退勤時刻を過ぎているのに出勤中の場合（退勤打刻がない）
-    if (now.isAfter(endDateTime) && hasCheckedIn && !hasCheckedOut) {
+    final isNeedNotifyForClockOut = ReminderUtils.isNeedNotifyForClockOut(
+      now: now,
+      endDateTime: endDateTime,
+      hasCheckedIn: hasCheckedIn,
+      hasCheckedOut: hasCheckedOut
+    );
+    if (isNeedNotifyForClockOut) {
       // 最初の通知 (退勤アクション付き)
       await _notificationService.showNotification(
         id: NotificationService.clockOutNotificationId,
