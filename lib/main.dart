@@ -11,6 +11,7 @@ import 'screens/app_settings_screen.dart';
 import 'utils/reminder_utils.dart'; // Import the new utility
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:holiday_jp/holiday_jp.dart' as HolidayJp;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -421,7 +422,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // 土日かどうかを判定する
   bool _isWeekend(DateTime date) {
-    return date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+    return date.weekday == DateTime.saturday || date.weekday == DateTime.sunday || _isHoliday(date);
+  }
+
+  // 日本の祝日かどうかを判定する
+  bool _isHoliday(DateTime date) {
+    return HolidayJp.isHoliday(date);
   }
 
   // 仕事の予定と通知の必要性をチェック
