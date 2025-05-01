@@ -436,20 +436,20 @@ class SettingsService {
         employeeId = userInfo.hr!.companies.first.employeeId;
       }
 
-      // 1ヶ月前の日付を取得
+      // 2週間前の日付を取得
       final now = DateTime.now();
       final fromDate = DateTime(
         now.year,
         now.month,
         now.day,
-      ).subtract(Duration(days: 30));
+      ).subtract(Duration(days: 14));
       final formattedFromDate =
           '${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}';
       final companyId = selectedCompany?.id ?? 0;
 
       final response = await http.get(
         Uri.parse(
-          'https://api.freee.co.jp/hr/api/v1/employees/$employeeId/time_clocks?from_date=$formattedFromDate&company_id=$companyId',
+          'https://api.freee.co.jp/hr/api/v1/employees/$employeeId/time_clocks?from_date=$formattedFromDate&company_id=$companyId&limit=100',
         ),
         headers: {
           'Authorization': 'Bearer $accessToken',
